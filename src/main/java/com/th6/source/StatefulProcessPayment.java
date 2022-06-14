@@ -5,6 +5,7 @@
  */
 package com.th6.source;
 
+import com.th6.model.PaymentTotal;
 import com.th6.model.CustomerPayment;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import scala.Tuple2;
