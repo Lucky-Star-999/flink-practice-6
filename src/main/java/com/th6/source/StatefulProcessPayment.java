@@ -24,6 +24,27 @@ import org.apache.flink.util.Collector;
 public class StatefulProcessPayment extends KeyedProcessFunction<Tuple2<Integer, Integer>, OrderPayment, CustomerPayment> {
 
     private transient ValueState<PaymentTotal> state;
+    
+    @Override
+    public void open(Configuration parameters) {
+        state = getRuntimeContext().getState(
+                new ValueStateDescriptor<>("myState", PaymentTotal.class));
+
+    }
+    
+    @Override
+        public void onTimer(
+                long timestamp,
+                KeyedProcessFunction<Tuple2<Integer, Integer>, OrderPayment, CustomerPayment>.OnTimerContext ctx,
+                Collector<CustomerPayment> out) throws Exception {
+            PaymentTotal result = state.value();
+            OrderPayment orderPayment = result.orderPayment;
+            if (timestamp == result.lastModified + 10000) {
+                out.collect(new CustomerPayment(orderPayment.CUSTOMERID, orderPayment.BRANDID,
+                orderPayment.PAYABLETYPE, orderPayment.TRANSACTIONTYPEID,
+                result.useTime, result.totalAmount));
+            }
+        }
 
     @Override
     public void processElement(OrderPayment orderPayment, KeyedProcessFunction<Tuple2<Integer, Integer>, OrderPayment, CustomerPayment>.Context context, Collector<CustomerPayment> out) throws Exception {
@@ -31,14 +52,19 @@ public class StatefulProcessPayment extends KeyedProcessFunction<Tuple2<Integer,
         if (paymentTotal == null) {
             paymentTotal = new PaymentTotal();
         }
-
+        
         paymentTotal.totalAmount += orderPayment.TOTALAMOUNT;
         paymentTotal.useTime++;
-
+        paymentTotal.orderPayment = orderPayment;
+        
+        paymentTotal.lastModified = context.timestamp();
         state.update(paymentTotal);
+        context.timerService().registerProcessingTimeTimer(paymentTotal.lastModified + 10000);
 
-        out.collect(new CustomerPayment(orderPayment.CUSTOMERID, orderPayment.BRANDID,
+        /*out.collect(new CustomerPayment(orderPayment.CUSTOMERID, orderPayment.BRANDID,
                 orderPayment.PAYABLETYPE, orderPayment.TRANSACTIONTYPEID,
-                paymentTotal.useTime, paymentTotal.totalAmount));
+                paymentTotal.useTime, paymentTotal.totalAmount));*/
     }
+
+    
 }
